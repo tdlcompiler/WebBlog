@@ -1,6 +1,7 @@
 ﻿namespace WebBlog.Services
 {
     using System.Text.Json;
+    using WebBlog.Exceptions;
     using WebBlog.Models;
 
     public class PostService
@@ -21,44 +22,29 @@
                 throw new InvalidOperationException("Idempotency key already used.");
             }
 
-            var PostModel = new PostModel
+            var post = new PostModel
             {
-                PostId = Guid.NewGuid(),
                 AuthorId = authorId,
                 Title = title,
                 Content = content,
-                IdempotencyKey = idempotencyKey,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
-                Status = "Draft",
-                Images = new List<ImageModel>()
+                IdempotencyKey = idempotencyKey
             };
 
-            _posts.Add(PostModel);
+            _posts.Add(post);
             SavePosts();
 
-            return new PostModel
-            {
-                PostId = PostModel.PostId,
-                Title = PostModel.Title,
-                Content = PostModel.Content,
-                CreatedAt = PostModel.CreatedAt,
-                UpdatedAt = PostModel.UpdatedAt,
-                Status = PostModel.Status
-            };
+            return post;
         }
 
-        public void AddImageToPost(Guid postId, string imageUrl)
+        public void AddImageToPost(string authorId, Guid postId, string imageUrl)
         {
-            var post = _posts.FirstOrDefault(p => p.PostId == postId);
-            if (post == null) throw new KeyNotFoundException("Post not found.");
+            var post = _posts.FirstOrDefault(p => p.PostId == postId) ?? throw new KeyNotFoundException("Post not found.");
+            if (post.AuthorId.ToString() != authorId) throw new Forbidden403Exception("Access denied.");
 
             post.Images.Add(new ImageModel
             {
-                ImageId = Guid.NewGuid(),
                 PostId = postId,
-                ImageUrl = imageUrl,
-                CreatedAt = DateTime.UtcNow
+                ImageUrl = imageUrl
             });
 
             SavePosts();
@@ -109,35 +95,12 @@
         public IEnumerable<PostModel> GetAuthorPosts(Guid userId)
         {
             return _posts
-                .Where(p => p.AuthorId == userId)
-                .Select(p => new PostModel
-                {
-                    PostId = p.PostId,
-                    AuthorId = p.AuthorId,
-                    Title = p.Title,
-                    Content = p.Content,
-                    CreatedAt = p.CreatedAt,
-                    UpdatedAt = p.UpdatedAt,
-                    Status = p.Status,
-                    Images = p.Images
-                });
+                .Where(p => p.AuthorId == userId);
         }
 
         public IEnumerable<PostModel> GetPublishedPosts()
         {
-            return _posts
-                .Where(p => p.Status == "Published")
-                .Select(p => new PostModel
-                {
-                    PostId = p.PostId,
-                    AuthorId = p.AuthorId,
-                    Title = p.Title,
-                    Content = p.Content,
-                    CreatedAt = p.CreatedAt,
-                    UpdatedAt = p.UpdatedAt,
-                    Status = p.Status,
-                    Images = p.Images
-                });
+            return _posts.Where(p => p.Status == "Published");
         }
 
         private List<PostModel> LoadPostsFromFile()
@@ -156,6 +119,11 @@
         {
             var json = JsonSerializer.Serialize(_posts, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(_postFilePath, json);
+        }
+
+        public bool UserHasAccessToFile(Guid userId, string fileName)
+        {
+            return _posts.Any(p => p.AuthorId == userId && p.Images.Any(i => i.ImageUrl.Contains(fileName)));
         }
     }
 }

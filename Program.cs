@@ -1,4 +1,5 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+п»їusing Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -22,6 +23,9 @@ namespace WebBlog
             builder.Services.AddSingleton(provider =>
     new PostService("data/posts.json"));
 
+            builder.Services.AddSingleton(provider =>
+    new ImageService("data/images/"));
+
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(c =>
             {
@@ -38,7 +42,7 @@ namespace WebBlog
                     Scheme = "Bearer",
                     BearerFormat = "JWT",
                     In = ParameterLocation.Header,
-                    Description = "Укажите JWT токен в формате: Bearer {токен}"
+                    Description = "РЈРєР°Р¶РёС‚Рµ JWT С‚РѕРєРµРЅ РІ С„РѕСЂРјР°С‚Рµ: Bearer РІР°С€_С‚РѕРєРµРЅ"
                 });
 
                 c.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -83,13 +87,19 @@ namespace WebBlog
                 };
             });
 
+            builder.Services.AddAuthorization();
+
             var app = builder.Build();
 
-            if (app.Environment.IsDevelopment())
+            app.UseStaticFiles(new StaticFileOptions
             {
-                app.UseSwagger();
-                app.UseSwaggerUI();
-            }
+                FileProvider = new PhysicalFileProvider(Path.Combine(Directory.GetCurrentDirectory(), "data/images")),
+                RequestPath = "/images"
+            });
+
+
+            app.UseSwagger();
+            app.UseSwaggerUI();
 
             app.UseAuthentication();
             app.UseAuthorization();

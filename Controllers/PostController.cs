@@ -6,6 +6,7 @@
     using System.Collections.Generic;
     using System.IO;
     using System.Linq;
+    using System.Security.Claims;
     using WebBlog.Models;
     using WebBlog.Models.Requests;
     using WebBlog.Services;
@@ -28,9 +29,9 @@
         {
             try
             {
-                var userId = Guid.Parse(User.Claims.First(c => c.Type == "sub").Value);
+                var userId = Guid.Parse(User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value);
                 var post = _postService.CreatePost(userId, dto.Title, dto.Content, dto.IdempotencyKey);
-                return CreatedAtAction(nameof(GetPost), new { id = post.PostId }, post);
+                return CreatedAtAction(nameof(GetPost), new { postId = post.PostId }, post);
             }
             catch (InvalidOperationException ex)
             {
@@ -40,13 +41,13 @@
 
         [HttpPost("{postId}/images")]
         [Authorize(Roles = "Author")]
-        [Consumes("multipart/form-data")]
         public IActionResult AddImageToPost(Guid postId, [FromForm] IFormFile image)
         {
             if (image == null) return BadRequest(new { Message = "No file uploaded." });
 
+            var authorId = User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value;
             var imageUrl = SaveImageToFileSystem(image);
-            _postService.AddImageToPost(postId, imageUrl);
+            _postService.AddImageToPost(authorId, postId, imageUrl);
             return Created("", new { Message = "Image added successfully." });
         }
 
@@ -56,7 +57,7 @@
         {
             try
             {
-                var userId = Guid.Parse(User.Claims.First(c => c.Type == "sub").Value);
+                var userId = Guid.Parse(User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value);
                 _postService.EditPost(userId, postId, dto.Title, dto.Content);
                 return Ok(new { Message = "Post successfully updated." });
             }
@@ -79,7 +80,7 @@
 
             try
             {
-                var userId = Guid.Parse(User.Claims.First(c => c.Type == "sub").Value);
+                var userId = Guid.Parse(User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value);
                 _postService.PublishPost(userId, postId);
                 return Ok(new { Message = "Post successfully published." });
             }
@@ -99,7 +100,7 @@
         {
             try
             {
-                var userId = Guid.Parse(User.Claims.First(c => c.Type == "sub").Value);
+                var userId = Guid.Parse(User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value);
                 _postService.DeleteImageFromPost(userId, postId, imageId);
                 return Ok(new { Message = "Image successfully deleted." });
             }
@@ -129,8 +130,8 @@
         [Authorize]
         public IActionResult GetPosts()
         {
-            var userId = Guid.Parse(User.Claims.First(c => c.Type == "sub").Value);
-            var role = User.Claims.First(c => c.Type == "role").Value;
+            var userId = Guid.Parse(User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value);
+            var role = User.Claims.First(c => c.Type == ClaimTypes.Role).Value;
 
             IEnumerable<PostModel> posts;
             if (role == "Author")

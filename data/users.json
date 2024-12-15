@@ -14,5 +14,13 @@
     "Role": "Author",
     "RefreshToken": "263fcfc4-30cf-428e-ae7b-e502a9576839",
     "RefreshTokenExpiryTime": "2024-12-21T21:18:12.865537Z"
+  },
+  {
+    "UserId": "d9808369-a244-4b79-95fc-4b372b824fd2",
+    "Email": "user2@example.com",
+    "PasswordHash": "$2a$11$6b0gir1pQVbEkSvMQWNCGeWVCdc1kNqBX.yck7.Tzuj2489VCFXPa",
+    "Role": "Author",
+    "RefreshToken": "TFhycULbhU63ec60f5eOXA==",
+    "RefreshTokenExpiryTime": "2024-12-22T23:20:16.3801475Z"
   }
 ]
