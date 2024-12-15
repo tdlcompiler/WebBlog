@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
 using System.Text;
+using WebBlog.Services;
 
 namespace WebBlog
 {
@@ -14,9 +16,17 @@ namespace WebBlog
 
             builder.Services.AddControllers();
 
+            builder.Services.AddSingleton(provider =>
+    new AuthService("data/users.json", provider.GetRequiredService<IConfiguration>()));
+
+            builder.Services.AddSingleton(provider =>
+    new PostService("data/posts.json"));
+
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(c =>
             {
+                c.OperationFilter<SwaggerFileOperationFilter>();
+
                 var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
                 var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
                 c.IncludeXmlComments(xmlPath);
@@ -72,10 +82,6 @@ namespace WebBlog
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
                 };
             });
-
-            builder.Services.AddSingleton(provider =>
-    new AuthService("data/users.json", provider.GetRequiredService<IConfiguration>()));
-
 
             var app = builder.Build();
 

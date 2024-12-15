@@ -54,7 +54,7 @@ public class AuthService
 
     public string GenerateRefreshToken(UserModel user)
     {
-        var refreshToken = Guid.NewGuid().ToString();
+        var refreshToken = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
         user.RefreshToken = refreshToken;
         user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
         SaveUsers();
@@ -74,7 +74,7 @@ public class AuthService
         };
     }
 
-    public string GenerateAccessToken(UserModel user)
+    private string GenerateAccessToken(UserModel user)
     {
         var tokenHandler = new JwtSecurityTokenHandler();
         var key = Encoding.ASCII.GetBytes(_configuration["Jwt:Secret"] ?? throw new Exception("JWT Secret not found."));
