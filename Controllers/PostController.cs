@@ -44,7 +44,7 @@
             {
                 var userId = Guid.Parse(User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value);
                 var post = _postService.CreatePost(userId, dto.Title, dto.Content, dto.IdempotencyKey);
-                return CreatedAtAction(nameof(PostModel), new { postId = post.PostId }, post);
+                return Created("", post);
             }
             catch (Conflict409Exception ex)
             {
