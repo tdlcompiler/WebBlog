@@ -90,13 +90,6 @@ namespace WebBlog
 
             var app = builder.Build();
 
-            app.UseStaticFiles(new StaticFileOptions
-            {
-                FileProvider = new PhysicalFileProvider(Path.Combine(Directory.GetCurrentDirectory(), "data/images")),
-                RequestPath = "/images"
-            });
-
-
             app.UseSwagger();
             app.UseSwaggerUI();
 

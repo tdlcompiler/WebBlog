@@ -31,6 +31,7 @@
         /// </summary>
         /// <param name="dto">Модель данных для создания поста, включающая заголовок, контент (текст) и ключ идемпотентности.</param>
         /// <returns>Результат (статус-код).</returns>
+        [ProducesResponseType(typeof(string), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(string), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden)]
         [ProducesResponseType(typeof(string), StatusCodes.Status409Conflict)]
@@ -61,6 +62,7 @@
         /// <param name="postId">Guid поста.</param>
         /// <param name="image">Файл с изображением, загруженный через форму.</param>
         /// <returns>Результат (статус-код) с сообщением.</returns>
+        [ProducesResponseType(typeof(string), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(string), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden)]
         [ProducesResponseType(typeof(string), StatusCodes.Status404NotFound)]
@@ -98,6 +100,7 @@
         /// <param name="postId">Guid поста.</param>
         /// <param name="dto">Модель данных для редактирования поста, включающая новый заголовок и новый контент (текст).</param>
         /// <returns>Результат (статус-код) с сообщением.</returns>
+        [ProducesResponseType(typeof(string), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(string), StatusCodes.Status404NotFound)]
         [ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden)]
@@ -132,6 +135,7 @@
         /// <param name="postId">Guid поста.</param>
         /// <param name="dto">Модель данных для публикации поста, включающая новый статус поста.</param>
         /// <returns>Результат (статус-код) с сообщением.</returns>
+        [ProducesResponseType(typeof(string), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(string), StatusCodes.Status404NotFound)]
@@ -174,6 +178,7 @@
         /// <param name="postId">Guid поста.</param>
         /// <param name="imageId">Guid изображения.</param>
         /// <returns>Результат (статус-код) с сообщением.</returns>
+        [ProducesResponseType(typeof(string), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(string), StatusCodes.Status404NotFound)]
         [ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden)]
@@ -207,6 +212,7 @@
         /// Получение постов.
         /// </summary>
         /// <returns>Список постов.</returns>
+        [ProducesResponseType(typeof(string), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError)]
         [HttpGet]

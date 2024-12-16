@@ -27,6 +27,7 @@ namespace WebBlog.Controllers
         /// </summary>
         /// <param name="fileName">Относительный путь файла на сервере (имя.расширение).</param>
         /// <returns>Файл.</returns>
+        [ProducesResponseType(typeof(string), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(string), StatusCodes.Status404NotFound)]
         [ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden)]
