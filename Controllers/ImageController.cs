@@ -6,6 +6,9 @@ using WebBlog.Services;
 
 namespace WebBlog.Controllers
 {
+    /// <summary>
+    /// Контроллер изображений (файлов на сервере).
+    /// </summary>
     [ApiController]
     [Route("api/images")]
     public class ImageController : ControllerBase
@@ -19,6 +22,15 @@ namespace WebBlog.Controllers
             _imageService = imageService;
         }
 
+        /// <summary>
+        /// Получение файла с сервера.
+        /// </summary>
+        /// <param name="fileName">Относительный путь файла на сервере (имя.расширение).</param>
+        /// <returns>Файл.</returns>
+        [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError)]
         [HttpGet("{fileName}")]
         [Authorize]
         public IActionResult GetFile(string fileName)

@@ -17,10 +17,7 @@
 
         public PostModel CreatePost(Guid authorId, string title, string content, string idempotencyKey)
         {
-            if (_posts.Any(p => p.IdempotencyKey == idempotencyKey))
-            {
-                throw new InvalidOperationException("Idempotency key already used.");
-            }
+            if (_posts.Any(p => p.IdempotencyKey == idempotencyKey)) throw new Conflict409Exception("Idempotency key already used.");
 
             var post = new PostModel
             {
@@ -36,10 +33,10 @@
             return post;
         }
 
-        public void AddImageToPost(string authorId, Guid postId, string imageUrl)
+        public void AddImageToPost(Guid authorId, Guid postId, string imageUrl)
         {
-            var post = _posts.FirstOrDefault(p => p.PostId == postId) ?? throw new KeyNotFoundException("Post not found.");
-            if (post.AuthorId.ToString() != authorId) throw new Forbidden403Exception("Access denied.");
+            var post = _posts.FirstOrDefault(p => p.PostId == postId) ?? throw new NotFound404Exception("Post not found.");
+            if (post.AuthorId != authorId) throw new Forbidden403Exception("Access denied.");
 
             post.Images.Add(new ImageModel
             {
@@ -50,18 +47,11 @@
             SavePosts();
         }
 
-        public PostModel GetPost(Guid postId)
-        {
-            var post = _posts.FirstOrDefault(p => p.PostId == postId);
-            if (post == null) throw new KeyNotFoundException("Post not found.");
-
-            return post;
-        }
-
         public void EditPost(Guid userId, Guid postId, string title, string content)
         {
-            var post = _posts.FirstOrDefault(p => p.PostId == postId && p.AuthorId == userId);
-            if (post == null) throw new KeyNotFoundException("Post not found.");
+            var post = _posts.FirstOrDefault(p => p.PostId == postId);
+            if (post == null) throw new NotFound404Exception("Post not found.");
+            if (post.AuthorId != userId) throw new Forbidden403Exception("Access denied.");
 
             post.Title = title;
             post.Content = content;
@@ -72,24 +62,55 @@
 
         public void PublishPost(Guid userId, Guid postId)
         {
-            var post = _posts.FirstOrDefault(p => p.PostId == postId && p.AuthorId == userId);
-            if (post == null) throw new KeyNotFoundException("Post not found.");
+            var post = _posts.FirstOrDefault(p => p.PostId == postId);
+            if (post == null) throw new NotFound404Exception("Post not found.");
+            if (post.AuthorId != userId) throw new Forbidden403Exception("Access denied.");
+            if (post.Status == "Published") throw new Conflict409Exception("Post already published.");
 
             post.Status = "Published";
 
             SavePosts();
         }
 
-        public void DeleteImageFromPost(Guid userId, Guid postId, Guid imageId)
+        public void DeleteImageFromPost(Guid userId, Guid postId, Guid imageId, string imageStoragePath)
         {
-            var post = _posts.FirstOrDefault(p => p.PostId == postId && p.AuthorId == userId);
-            if (post == null) throw new KeyNotFoundException("Post not found.");
+            var post = _posts.FirstOrDefault(p => p.PostId == postId);
+            if (post == null) throw new NotFound404Exception("Post not found.");
+            if (post.AuthorId != userId) throw new Forbidden403Exception("Access denied.");
 
             var image = post.Images.FirstOrDefault(i => i.ImageId == imageId);
-            if (image == null) throw new KeyNotFoundException("Image not found.");
+            if (image == null) throw new NotFound404Exception("Image not found.");
 
+            DeleteImageFromFileSystem(Path.Combine(imageStoragePath, image.ImageUrl));
             post.Images.Remove(image);
             SavePosts();
+        }
+
+        private void DeleteImageFromFileSystem(string imageFullPath)
+        {
+            if (File.Exists(imageFullPath))
+            {
+                File.Delete(imageFullPath);
+            }
+            else
+            {
+                throw new FileNotFoundException("Image not found in FS", imageFullPath);
+            }
+        }
+
+        public string SaveImageToFileSystem(IFormFile image, string imageStoragePath)
+        {
+            var fileName = $"{Guid.NewGuid()}{Path.GetExtension(image.FileName)}";
+            var filePath = Path.Combine(imageStoragePath, fileName);
+
+            Directory.CreateDirectory(imageStoragePath);
+
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                image.CopyTo(stream);
+            }
+
+            return fileName;
         }
 
         public IEnumerable<PostModel> GetAuthorPosts(Guid userId)

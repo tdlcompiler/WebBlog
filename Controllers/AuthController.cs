@@ -3,6 +3,9 @@ using WebBlog.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using WebBlog.Models.Requests;
 
+/// <summary>
+/// Контроллер пользователей.
+/// </summary>
 [ApiController]
 [Route("api/auth")]
 public class AuthController : ControllerBase

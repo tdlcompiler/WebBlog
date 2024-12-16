@@ -4,13 +4,16 @@
     using Microsoft.AspNetCore.Mvc;
     using System;
     using System.Collections.Generic;
-    using System.IO;
     using System.Linq;
     using System.Security.Claims;
+    using WebBlog.Exceptions;
     using WebBlog.Models;
     using WebBlog.Models.Requests;
     using WebBlog.Services;
 
+    /// <summary>
+    /// Контроллер постов.
+    /// </summary>
     [ApiController]
     [Route("api/posts")]
     public class PostController : ControllerBase
@@ -23,6 +26,15 @@
             _postService = postService;
         }
 
+        /// <summary>
+        /// Создание нового поста.
+        /// </summary>
+        /// <param name="dto">Модель данных для создания поста, включающая заголовок, контент (текст) и ключ идемпотентности.</param>
+        /// <returns>Результат (статус-код).</returns>
+        [ProducesResponseType(typeof(string), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status409Conflict)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError)]
         [HttpPost]
         [Authorize(Roles = "Author")]
         public IActionResult CreatePost([FromBody] CreatePostRequestModel dto)
@@ -31,26 +43,65 @@
             {
                 var userId = Guid.Parse(User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value);
                 var post = _postService.CreatePost(userId, dto.Title, dto.Content, dto.IdempotencyKey);
-                return CreatedAtAction(nameof(GetPost), new { postId = post.PostId }, post);
+                return CreatedAtAction(nameof(PostModel), new { postId = post.PostId }, post);
             }
-            catch (InvalidOperationException ex)
+            catch (Conflict409Exception ex)
             {
-                return Conflict(new { Message = ex.Message });
+                return Conflict(new { ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { ex.Message });
             }
         }
 
+        /// <summary>
+        /// Добавление изображения к посту.
+        /// </summary>
+        /// <param name="postId">Guid поста.</param>
+        /// <param name="image">Файл с изображением, загруженный через форму.</param>
+        /// <returns>Результат (статус-код) с сообщением.</returns>
+        [ProducesResponseType(typeof(string), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError)]
         [HttpPost("{postId}/images")]
         [Authorize(Roles = "Author")]
         public IActionResult AddImageToPost(Guid postId, [FromForm] IFormFile image)
         {
-            if (image == null) return BadRequest(new { Message = "No file uploaded." });
+            try
+            {
+                if (image == null) return BadRequest(new { Message = "No file uploaded." });
 
-            var authorId = User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value;
-            var imageUrl = SaveImageToFileSystem(image);
-            _postService.AddImageToPost(authorId, postId, imageUrl);
-            return Created("", new { Message = "Image added successfully." });
+                var authorId = Guid.Parse(User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value);
+                var imageUrl = _postService.SaveImageToFileSystem(image, _imageStoragePath);
+                _postService.AddImageToPost(authorId, postId, imageUrl);
+                return Created("", new { Message = "Image added successfully." });
+            }
+            catch (NotFound404Exception ex)
+            {
+                return NotFound(new { ex.Message });
+            }
+            catch (Forbidden403Exception ex)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new { ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { ex.Message });
+            }
         }
 
+        /// <summary>
+        /// Редактирование существующего поста.
+        /// </summary>
+        /// <param name="postId">Guid поста.</param>
+        /// <param name="dto">Модель данных для редактирования поста, включающая новый заголовок и новый контент (текст).</param>
+        /// <returns>Результат (статус-код) с сообщением.</returns>
+        [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError)]
         [HttpPut("{postId}")]
         [Authorize(Roles = "Author")]
         public IActionResult EditPost(Guid postId, [FromBody] EditPostRequestModel dto)
@@ -61,39 +112,73 @@
                 _postService.EditPost(userId, postId, dto.Title, dto.Content);
                 return Ok(new { Message = "Post successfully updated." });
             }
-            catch (KeyNotFoundException ex)
+            catch (NotFound404Exception ex)
             {
                 return NotFound(new { ex.Message });
             }
-            catch (UnauthorizedAccessException ex)
+            catch (Forbidden403Exception ex)
             {
-                return Forbid(ex.Message);
+                return StatusCode(StatusCodes.Status403Forbidden, new { ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { ex.Message });
             }
         }
 
+        /// <summary>
+        /// Публикация существующего неопубликованного поста.
+        /// </summary>
+        /// <param name="postId">Guid поста.</param>
+        /// <param name="dto">Модель данных для публикации поста, включающая новый статус поста.</param>
+        /// <returns>Результат (статус-код) с сообщением.</returns>
+        [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status409Conflict)] // В ТЗ нет, но, по-моему, должно быть
+        [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError)]
         [HttpPatch("{postId}/status")]
         [Authorize(Roles = "Author")]
         public IActionResult PublishPost(Guid postId, [FromBody] PublishPostRequestModel dto)
         {
             if (dto.Status != "Published")
                 return BadRequest(new { Message = "Invalid status value." });
-
             try
             {
                 var userId = Guid.Parse(User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value);
                 _postService.PublishPost(userId, postId);
                 return Ok(new { Message = "Post successfully published." });
             }
-            catch (KeyNotFoundException ex)
+            catch (NotFound404Exception ex)
             {
-                return NotFound(new { Message = ex.Message });
+                return NotFound(new { ex.Message });
             }
-            catch (UnauthorizedAccessException ex)
+            catch (Conflict409Exception ex)
             {
-                return Forbid(ex.Message);
+                return Conflict(new { ex.Message });
+            }
+            catch (Forbidden403Exception ex)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new { ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { ex.Message });
             }
         }
 
+        /// <summary>
+        /// Удаления изображения из поста.
+        /// </summary>
+        /// <param name="postId">Guid поста.</param>
+        /// <param name="imageId">Guid изображения.</param>
+        /// <returns>Результат (статус-код) с сообщением.</returns>
+        [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError)]
         [HttpDelete("{postId}/images/{imageId}")]
         [Authorize(Roles = "Author")]
         public IActionResult DeleteImage(Guid postId, Guid imageId)
@@ -101,64 +186,54 @@
             try
             {
                 var userId = Guid.Parse(User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value);
-                _postService.DeleteImageFromPost(userId, postId, imageId);
+                _postService.DeleteImageFromPost(userId, postId, imageId, _imageStoragePath);
                 return Ok(new { Message = "Image successfully deleted." });
             }
-            catch (KeyNotFoundException ex)
+            catch (NotFound404Exception ex)
             {
-                return NotFound(new { Message = ex.Message });
+                return NotFound(new { ex.Message });
             }
-            catch (UnauthorizedAccessException ex)
+            catch (Forbidden403Exception ex)
             {
-                return Forbid(ex.Message);
+                return StatusCode(StatusCodes.Status403Forbidden, new { ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { ex.Message });
             }
         }
 
-        [Authorize(Roles = "Author")]
-        [HttpGet("{postId}")]
-        public IActionResult GetPost([FromRoute] Guid postId)
-        {
-            var post = _postService.GetPost(postId);
-
-            if (post == null)
-                return NotFound("Post not found.");
-
-            return Ok(post);
-        }
-
+        /// <summary>
+        /// Получение постов.
+        /// </summary>
+        /// <returns>Список постов.</returns>
+        [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError)]
         [HttpGet]
         [Authorize]
         public IActionResult GetPosts()
         {
-            var userId = Guid.Parse(User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value);
-            var role = User.Claims.First(c => c.Type == ClaimTypes.Role).Value;
-
-            IEnumerable<PostModel> posts;
-            if (role == "Author")
+            try
             {
-                posts = _postService.GetAuthorPosts(userId);
+                var userId = Guid.Parse(User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value);
+                var role = User.Claims.First(c => c.Type == ClaimTypes.Role).Value;
+
+                IEnumerable<PostModel> posts;
+                if (role == "Author")
+                {
+                    posts = _postService.GetAuthorPosts(userId);
+                }
+                else
+                {
+                    posts = _postService.GetPublishedPosts();
+                }
+
+                return Ok(posts);
             }
-            else
+            catch (Exception ex)
             {
-                posts = _postService.GetPublishedPosts();
+                return StatusCode(StatusCodes.Status500InternalServerError, new { ex.Message });
             }
-
-            return Ok(posts);
-        }
-
-        private string SaveImageToFileSystem(IFormFile image)
-        {
-            var fileName = $"{Guid.NewGuid()}{Path.GetExtension(image.FileName)}";
-            var filePath = Path.Combine(_imageStoragePath, fileName);
-
-            Directory.CreateDirectory(_imageStoragePath);
-
-            using (var stream = new FileStream(filePath, FileMode.Create))
-            {
-                image.CopyTo(stream);
-            }
-
-            return $"/images/{fileName}";
         }
     }
 }

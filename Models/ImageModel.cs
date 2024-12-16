@@ -9,7 +9,7 @@ namespace WebBlog.Models
         [Required]
         public Guid PostId { get; set; }
         [Required]
-        public string? ImageUrl { get; set; }
+        public string ImageUrl { get; set; } = string.Empty;
         [Required]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
