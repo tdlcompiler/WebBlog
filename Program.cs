@@ -1,9 +1,11 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.Extensions.FileProviders;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
 using System.Text;
+using WebBlog.Repository;
+using WebBlog.Repository.UserRepository;
 using WebBlog.Services;
 
 namespace WebBlog
@@ -16,14 +18,42 @@ namespace WebBlog
 
             builder.Services.AddControllers();
 
-            builder.Services.AddSingleton(provider =>
-    new AuthService("data/users.json", provider.GetRequiredService<IConfiguration>()));
+            builder.Services.AddDbContext<BlogDbContext>(options =>
+        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-            builder.Services.AddSingleton(provider =>
-    new PostService("data/posts.json"));
+            builder.Services.AddScoped<IPostRepository, PostgresPostRepository>();
+            builder.Services.AddScoped<IUserRepository, PostgresUserRepository>();
 
+            string dbType = builder.Configuration["Database"] ?? "postgres";
+            if (args.Length > 0)
+            {
+                foreach (var arg in args)
+                {
+                    if (arg.StartsWith("database="))
+                    {
+                        dbType = arg.Split('=')[1];
+                        break;
+                    }
+                }
+            }
+
+            if (dbType.Equals("file", StringComparison.CurrentCultureIgnoreCase))
+            {
+                Console.WriteLine("Используется файловая БД (FileRepository)");
+                builder.Services.AddSingleton(provider =>
+                    new AuthService("data/users.json", provider.GetRequiredService<IConfiguration>()));
+                builder.Services.AddSingleton(provider =>
+                    new PostService("data/posts.json"));
+            }
+            else
+            {
+                Console.WriteLine("Используется PostgreSQL БД (PostgresRepository)");
+                builder.Services.AddScoped<AuthService>();
+                builder.Services.AddScoped<PostService>();
+            }
+            
             builder.Services.AddSingleton(provider =>
-    new ImageService("data/images/"));
+                new ImageService("data/images/"));
 
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(c =>
@@ -89,6 +119,18 @@ namespace WebBlog
             builder.Services.AddAuthorization();
 
             var app = builder.Build();
+
+            using (var scope = app.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<BlogDbContext>();
+                db.Database.Migrate();
+            }
+
+            if (args.Contains("--migrate"))
+            {
+                Console.WriteLine("Migrations applied successfully. Exiting...");
+                return;
+            }
 
             app.UseSwagger();
             app.UseSwaggerUI();

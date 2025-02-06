@@ -9,15 +9,19 @@ using WebBlog.Repository.UserRepository;
 
 public class AuthService
 {
-    private readonly string _userFilePath;
     private readonly IConfiguration _configuration;
     private IUserRepository _userRepository;
 
     public AuthService(string userFilePath, IConfiguration configuration)
     {
-        _userFilePath = userFilePath;
         _configuration = configuration;
         _userRepository = new FileUserRepository(userFilePath);
+    }
+
+    public AuthService(IUserRepository userRepository, IConfiguration configuration)
+    {
+        _configuration = configuration;
+        _userRepository = userRepository;
     }
 
     public UserModel Register(string email, string password, string role)

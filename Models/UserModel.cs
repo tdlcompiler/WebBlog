@@ -4,7 +4,7 @@ namespace WebBlog.Models
 {
     public class UserModel
     {
-        public Guid UserId { get; set; } = Guid.NewGuid();
+        [Key] public Guid UserId { get; set; } = Guid.NewGuid();
 
         [Required]
         [EmailAddress]
@@ -15,9 +15,6 @@ namespace WebBlog.Models
         [Required]
         public string Role { get; set; } = "Reader";
         public string RefreshToken { get; set; } = string.Empty;
-        public DateTime RefreshTokenExpiryTime
-        {
-            get; set;
-        }
+        public DateTime RefreshTokenExpiryTime { get; set; }
     }
 }

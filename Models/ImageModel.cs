@@ -1,13 +1,14 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace WebBlog.Models
 {
     public class ImageModel
     {
         [Required]
-        public Guid ImageId { get; set; } = Guid.NewGuid();
+        [Key] public Guid ImageId { get; set; } = Guid.NewGuid();
         [Required]
-        public Guid PostId { get; set; }
+        [ForeignKey("Post")] public Guid PostId { get; set; }
         [Required]
         public string ImageUrl { get; set; } = string.Empty;
         [Required]

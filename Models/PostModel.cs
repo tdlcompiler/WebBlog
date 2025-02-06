@@ -5,7 +5,7 @@ namespace WebBlog.Models
     public class PostModel
     {
         [Required]
-        public Guid PostId { get; set; } = Guid.NewGuid();
+        [Key] public Guid PostId { get; set; } = Guid.NewGuid();
         [Required]
         public Guid AuthorId { get; set; }
         [Required]

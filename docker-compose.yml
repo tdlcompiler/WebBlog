@@ -1,0 +1,44 @@
+services:
+  webblog:
+    build: .
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Username=postgres;Password=postgres;Database=WebBlogDB
+    ports:
+      - "5000:80"
+    volumes:
+      - webblog_data:/app/data
+      - dataprotection_keys:/root/.aspnet/DataProtection-Keys
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: WebBlogDB
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d WebBlogDB"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+    driver: local
+  webblog_data:
+    driver: local
+  dataprotection_keys:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge

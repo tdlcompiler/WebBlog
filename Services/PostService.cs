@@ -1,23 +1,28 @@
 ﻿namespace WebBlog.Services
 {
-    using System.Text.Json;
+    using Microsoft.Extensions.Configuration;
     using WebBlog.Exceptions;
     using WebBlog.Models;
+    using WebBlog.Repository.PostRepository;
+    using WebBlog.Repository.UserRepository;
 
     public class PostService
     {
-        private readonly string _postFilePath;
-        private List<PostModel> _posts;
+        private IPostRepository _postRepository;
 
         public PostService(string postFilePath)
         {
-            _postFilePath = postFilePath;
-            _posts = LoadPostsFromFile();
+            _postRepository = new FilePostRepository(postFilePath);
+        }
+
+        public PostService(IPostRepository postRepository)
+        {
+            _postRepository = postRepository;
         }
 
         public PostModel CreatePost(Guid authorId, string title, string content, string idempotencyKey)
         {
-            if (_posts.Any(p => p.IdempotencyKey == idempotencyKey)) throw new Conflict409Exception("Idempotency key already used.");
+            if (_postRepository.PostExists(p => p.IdempotencyKey == idempotencyKey)) throw new Conflict409Exception("Idempotency key already used.");
 
             var post = new PostModel
             {
@@ -27,29 +32,28 @@
                 IdempotencyKey = idempotencyKey
             };
 
-            _posts.Add(post);
-            SavePosts();
+            _postRepository.AddPost(post);
 
             return post;
         }
 
         public void AddImageToPost(Guid authorId, Guid postId, string imageUrl)
         {
-            var post = _posts.FirstOrDefault(p => p.PostId == postId) ?? throw new NotFound404Exception("Post not found.");
+            var post = _postRepository.GetPostById(postId) ?? throw new NotFound404Exception("Post not found.");
             if (post.AuthorId != authorId) throw new Forbidden403Exception("Access denied.");
-
-            post.Images.Add(new ImageModel
+            ImageModel image = new ImageModel
             {
                 PostId = postId,
                 ImageUrl = imageUrl
-            });
+            };
+            post.Images.Add(image);
 
-            SavePosts();
+            _postRepository.UpdatePost(post, image);
         }
 
         public void EditPost(Guid userId, Guid postId, string title, string content)
         {
-            var post = _posts.FirstOrDefault(p => p.PostId == postId);
+            var post = _postRepository.GetPostById(postId);
             if (post == null) throw new NotFound404Exception("Post not found.");
             if (post.AuthorId != userId) throw new Forbidden403Exception("Access denied.");
 
@@ -57,24 +61,24 @@
             post.Content = content;
             post.UpdatedAt = DateTime.UtcNow;
 
-            SavePosts();
+            _postRepository.UpdatePost(post);
         }
 
         public void PublishPost(Guid userId, Guid postId)
         {
-            var post = _posts.FirstOrDefault(p => p.PostId == postId);
+            var post = _postRepository.GetPostById(postId);
             if (post == null) throw new NotFound404Exception("Post not found.");
             if (post.AuthorId != userId) throw new Forbidden403Exception("Access denied.");
             if (post.Status == "Published") throw new Conflict409Exception("Post already published.");
 
             post.Status = "Published";
 
-            SavePosts();
+            _postRepository.UpdatePost(post);
         }
 
         public void DeleteImageFromPost(Guid userId, Guid postId, Guid imageId, string imageStoragePath)
         {
-            var post = _posts.FirstOrDefault(p => p.PostId == postId);
+            var post = _postRepository.GetPostById(postId);
             if (post == null) throw new NotFound404Exception("Post not found.");
             if (post.AuthorId != userId) throw new Forbidden403Exception("Access denied.");
 
@@ -83,7 +87,8 @@
 
             DeleteImageFromFileSystem(Path.Combine(imageStoragePath, image.ImageUrl));
             post.Images.Remove(image);
-            SavePosts();
+
+            _postRepository.UpdatePost(post);
         }
 
         private void DeleteImageFromFileSystem(string imageFullPath)
@@ -115,36 +120,17 @@
 
         public IEnumerable<PostModel> GetAuthorPosts(Guid userId)
         {
-            return _posts
-                .Where(p => p.AuthorId == userId);
+            return _postRepository.GetPosts(p => p.AuthorId == userId);
         }
 
         public IEnumerable<PostModel> GetPublishedPosts()
         {
-            return _posts.Where(p => p.Status == "Published");
-        }
-
-        private List<PostModel> LoadPostsFromFile()
-        {
-            if (!File.Exists(_postFilePath))
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(_postFilePath) ?? throw new Exception("Invalid posts storage path."));
-                File.WriteAllText(_postFilePath, "[]");
-            }
-
-            var json = File.ReadAllText(_postFilePath);
-            return JsonSerializer.Deserialize<List<PostModel>>(json) ?? new List<PostModel>();
-        }
-
-        private void SavePosts()
-        {
-            var json = JsonSerializer.Serialize(_posts, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(_postFilePath, json);
+            return _postRepository.GetPosts(p => p.Status == "Published");
         }
 
         public bool UserHasAccessToFile(Guid userId, string fileName)
         {
-            return _posts.Any(p => p.AuthorId == userId && p.Images.Any(i => i.ImageUrl.Contains(fileName)));
+            return _postRepository.PostExists(p => ((p.AuthorId == userId) || (p.Status == "Published")) && p.Images.Any(i => i.ImageUrl.Contains(fileName)));
         }
     }
 }
