@@ -5,18 +5,19 @@ using System.Text;
 using System.Text.RegularExpressions;
 using WebBlog.Exceptions;
 using WebBlog.Models;
+using WebBlog.Repository.UserRepository;
 
 public class AuthService
 {
     private readonly string _userFilePath;
     private readonly IConfiguration _configuration;
-    private List<UserModel> _users;
+    private IUserRepository _userRepository;
 
     public AuthService(string userFilePath, IConfiguration configuration)
     {
         _userFilePath = userFilePath;
         _configuration = configuration;
-        _users = UserModel.LoadFromFile(_userFilePath);
+        _userRepository = new FileUserRepository(userFilePath);
     }
 
     public UserModel Register(string email, string password, string role)
@@ -27,7 +28,7 @@ public class AuthService
             throw new BadRequest400Exception("Empty password.");
         if (string.IsNullOrEmpty(role) || (role != "Reader" && role != "Author"))
             throw new BadRequest400Exception("Invalid role.");
-        if (_users.Any(u => u.Email == email))
+        if (_userRepository.UserExistsByEmail(email))
             throw new Forbidden403Exception("Email already exists.");
 
         var newUser = new UserModel
@@ -37,15 +38,14 @@ public class AuthService
             Role = role
         };
 
-        _users.Add(newUser);
-        SaveUsers();
+        _userRepository.AddUser(newUser);
 
         return newUser;
     }
 
     public UserModel Authenticate(string email, string password)
     {
-        var user = _users.FirstOrDefault(u => u.Email == email);
+        var user = _userRepository.GetUserByEmail(email);
         if (user == null || !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
             throw new Forbidden403Exception("Invalid credentials.");
 
@@ -57,7 +57,7 @@ public class AuthService
         var refreshToken = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
         user.RefreshToken = refreshToken;
         user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
-        SaveUsers();
+        _userRepository.UpdateUser(user);
 
         return refreshToken;
     }
@@ -95,15 +95,10 @@ public class AuthService
 
     public UserModel ValidateRefreshToken(string refreshToken)
     {
-        var user = _users.FirstOrDefault(u => u.RefreshToken == refreshToken);
+        var user = _userRepository.GetUserByRefreshToken(refreshToken);
         if (user == null || user.RefreshTokenExpiryTime < DateTime.UtcNow)
             throw new BadRequest400Exception("Invalid or expired refresh token.");
 
         return user;
-    }
-
-    private void SaveUsers()
-    {
-        UserModel.SaveToFile(_userFilePath, _users);
     }
 }
